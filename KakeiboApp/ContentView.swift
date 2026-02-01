@@ -5,6 +5,7 @@
 //  Created by TAKUYA MUKAIYAMA on 2026/02/01.
 //
 
+import Charts
 import SwiftUI
 
 // データモデル
@@ -15,6 +16,21 @@ struct Transaction: Identifiable, Codable {
     var amount: Double
     var isIncome: Bool
     var memo: String
+}
+
+struct MonthlySummary: Identifiable {
+    let month: Date
+    let income: Double
+    let expense: Double
+
+    var id: Date { month }
+}
+
+struct ExpenseCategorySummary: Identifiable {
+    let category: String
+    let amount: Double
+
+    var id: String { category }
 }
 
 // メインビュー
@@ -33,6 +49,30 @@ struct ContentView: View {
     var balance: Double {
         totalIncome - totalExpense
     }
+
+    var monthlySummaries: [MonthlySummary] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: transactions) { transaction in
+            calendar.date(from: calendar.dateComponents([.year, .month], from: transaction.date)) ?? transaction.date
+        }
+
+        return grouped.map { month, entries in
+            let income = entries.filter { $0.isIncome }.reduce(0) { $0 + $1.amount }
+            let expense = entries.filter { !$0.isIncome }.reduce(0) { $0 + $1.amount }
+            return MonthlySummary(month: month, income: income, expense: expense)
+        }
+        .sorted { $0.month < $1.month }
+    }
+
+    var expenseCategorySummaries: [ExpenseCategorySummary] {
+        let expenses = transactions.filter { !$0.isIncome }
+        let grouped = Dictionary(grouping: expenses, by: { $0.category })
+        return grouped.map { category, entries in
+            let amount = entries.reduce(0) { $0 + $1.amount }
+            return ExpenseCategorySummary(category: category, amount: amount)
+        }
+        .sorted { $0.amount > $1.amount }
+    }
     
     var body: some View {
         NavigationView {
@@ -45,12 +85,75 @@ struct ContentView: View {
                 }
                 .padding()
                 
-                // 取引リスト
+                // グラフと取引リスト
                 List {
-                    ForEach(transactions.sorted(by: { $0.date > $1.date })) { transaction in
-                        TransactionRow(transaction: transaction)
+                    Section(header: Text("グラフ")) {
+                        VStack(alignment: .leading, spacing: 20) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("月別収支")
+                                    .font(.headline)
+                                if monthlySummaries.isEmpty {
+                                    Text("取引を追加すると月別の収支グラフが表示されます。")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Chart {
+                                        ForEach(monthlySummaries) { summary in
+                                            LineMark(
+                                                x: .value("月", summary.month, unit: .month),
+                                                y: .value("金額", summary.income)
+                                            )
+                                            .foregroundStyle(by: .value("種別", "収入"))
+                                            .symbol(by: .value("種別", "収入"))
+
+                                            LineMark(
+                                                x: .value("月", summary.month, unit: .month),
+                                                y: .value("金額", summary.expense)
+                                            )
+                                            .foregroundStyle(by: .value("種別", "支出"))
+                                            .symbol(by: .value("種別", "支出"))
+                                        }
+                                    }
+                                    .chartXAxis {
+                                        AxisMarks(values: .stride(by: .month)) { value in
+                                            AxisValueLabel(format: .dateTime.year().month(.twoDigits))
+                                        }
+                                    }
+                                    .frame(height: 220)
+                                }
+                            }
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("カテゴリ別支出")
+                                    .font(.headline)
+                                if expenseCategorySummaries.isEmpty {
+                                    Text("支出があるとカテゴリ別の内訳が表示されます。")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Chart {
+                                        ForEach(expenseCategorySummaries) { summary in
+                                            SectorMark(
+                                                angle: .value("金額", summary.amount),
+                                                innerRadius: .ratio(0.6)
+                                            )
+                                            .foregroundStyle(by: .value("カテゴリ", summary.category))
+                                        }
+                                    }
+                                    .chartLegend(position: .bottom, alignment: .leading)
+                                    .frame(height: 240)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 8)
                     }
-                    .onDelete(perform: deleteTransaction)
+
+                    Section(header: Text("取引履歴")) {
+                        ForEach(transactions.sorted(by: { $0.date > $1.date })) { transaction in
+                            TransactionRow(transaction: transaction)
+                        }
+                        .onDelete(perform: deleteTransaction)
+                    }
                 }
                 .listStyle(InsetGroupedListStyle())
             }
@@ -208,4 +311,3 @@ struct AddTransactionView: View {
 #Preview {
     ContentView()
 }
-
