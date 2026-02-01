@@ -37,6 +37,7 @@ struct ExpenseCategorySummary: Identifiable {
 struct ContentView: View {
     @State private var transactions: [Transaction] = []
     @State private var showingAddSheet = false
+    private let summaryColor = Color.purple
     
     var totalIncome: Double {
         transactions.filter { $0.isIncome }.reduce(0) { $0 + $1.amount }
@@ -79,9 +80,9 @@ struct ContentView: View {
             VStack {
                 // サマリー表示
                 HStack(spacing: 30) {
-                    SummaryCard(title: "収入", amount: totalIncome, color: .green)
-                    SummaryCard(title: "支出", amount: totalExpense, color: .red)
-                    SummaryCard(title: "残高", amount: balance, color: .blue)
+                    SummaryCard(title: "収入", amount: totalIncome, color: summaryColor)
+                    SummaryCard(title: "支出", amount: totalExpense, color: summaryColor)
+                    SummaryCard(title: "残高", amount: balance, color: summaryColor)
                 }
                 .padding()
                 
